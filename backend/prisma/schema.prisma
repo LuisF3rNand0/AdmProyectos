@@ -1,0 +1,122 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  nombre    String
+  email     String   @unique
+  password  String
+  rol       String   // "vendedor" | "contabilidad" | "almacen" | "admin"
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pedidos   Pedido[]
+}
+
+model Categoria {
+  id          String     @id @default(uuid())
+  nombre      String     @unique
+  descripcion String?
+  createdAt   DateTime   @default(now())
+
+  productos   Producto[]
+}
+
+model Producto {
+  id          String    @id @default(uuid())
+  codigo      String    @unique
+  nombre      String
+  descripcion String?
+  precio      Float
+  stock       Int       @default(0)
+  unidad      String    @default("UND")
+  imagen      String?
+  activo      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  categoriaId String
+  categoria   Categoria @relation(fields: [categoriaId], references: [id])
+
+  itemsPedido ItemPedido[]
+}
+
+model Pedido {
+  id            String    @id @default(uuid())
+  numeroPedido  String    @unique
+  estado        String    @default("pendiente")
+  // estados: pendiente | voucher_cargado | en_revision | confirmado | en_despacho | despachado | cancelado
+
+  clienteNombre String
+  clienteRuc    String?
+  clienteTelef  String?
+  notas         String?
+
+  subtotal      Float
+  igv           Float
+  total         Float
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  vendedorId    String
+  vendedor      User      @relation(fields: [vendedorId], references: [id])
+
+  items         ItemPedido[]
+  voucher       Voucher?
+}
+
+model ItemPedido {
+  id         String   @id @default(uuid())
+  cantidad   Int
+  precioUnit Float
+  subtotal   Float
+
+  pedidoId   String
+  pedido     Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  productoId String
+  producto   Producto @relation(fields: [productoId], references: [id])
+}
+
+model Voucher {
+  id               String    @id @default(uuid())
+  imagenUrl        String
+  imagenNombre     String
+
+  // Datos extraídos por OCR
+  ocrMonto         Float?
+  ocrFecha         String?
+  ocrNumOperacion  String?
+  ocrBanco         String?
+  ocrRawText       String?
+  ocrConfianza     Float?    // 0-100
+
+  // Validación contable
+  estadoRevision   String    @default("pendiente") // pendiente | aprobado | rechazado
+  notaContable     String?
+  revisadoEn       DateTime?
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  pedidoId         String    @unique
+  pedido           Pedido    @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+}
+
+model Notificacion {
+  id        String   @id @default(uuid())
+  tipo      String   // "nuevo_pedido" | "voucher_cargado" | "pedido_confirmado" | "pedido_despachado"
+  mensaje   String
+  leida     Boolean  @default(false)
+  rolDestino String  // "almacen" | "contabilidad" | "admin"
+  pedidoId  String?
+  createdAt DateTime @default(now())
+}
