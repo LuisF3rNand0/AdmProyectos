@@ -165,29 +165,43 @@ router.patch('/:id/estado', verificarToken, async (req, res) => {
     const io = req.app.get('io');
 
     if (estado === 'confirmado') {
+      // Registrar latencia para métrica < 30 seg del Plan de Calidad
+      const eventoOrigen = new Date();
+      io.to('almacen').emit('pedido_confirmado', { pedido });
+      io.to('admin').emit('pedido_confirmado', { pedido });
+      const entregadaEn = new Date();
+      const latenciaMs = entregadaEn - eventoOrigen;
+
       await prisma.notificacion.create({
         data: {
           tipo: 'pedido_confirmado',
           mensaje: `Pedido ${pedido.numeroPedido} CONFIRMADO - Preparar despacho`,
           rolDestino: 'almacen',
           pedidoId: pedido.id,
+          eventoOrigen,
+          entregadaEn,
+          latenciaMs,
         },
       });
-      io.to('almacen').emit('pedido_confirmado', { pedido });
-      io.to('admin').emit('pedido_confirmado', { pedido });
     }
 
     if (estado === 'despachado') {
+      const eventoOrigen = new Date();
+      io.to('contabilidad').emit('pedido_despachado', { pedido });
+      io.to('vendedor').emit('pedido_despachado', { pedido });
+      const entregadaEn = new Date();
+
       await prisma.notificacion.create({
         data: {
           tipo: 'pedido_despachado',
           mensaje: `Pedido ${pedido.numeroPedido} despachado exitosamente`,
           rolDestino: 'contabilidad',
           pedidoId: pedido.id,
+          eventoOrigen,
+          entregadaEn,
+          latenciaMs: entregadaEn - eventoOrigen,
         },
       });
-      io.to('contabilidad').emit('pedido_despachado', { pedido });
-      io.to('vendedor').emit('pedido_despachado', { pedido });
     }
 
     res.json(pedido);

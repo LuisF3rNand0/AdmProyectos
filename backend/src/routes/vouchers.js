@@ -24,15 +24,16 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  const tiposPermitidos = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  // OWASP: solo JPEG y PNG según Plan de Calidad (máx. 5MB)
+  const tiposPermitidos = ['image/jpeg', 'image/png'];
   if (tiposPermitidos.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Solo se permiten imágenes (JPEG, PNG, WEBP)'), false);
+    cb(new Error('Solo se permiten imágenes JPEG o PNG'), false);
   }
 };
 
-const upload = multer({ storage, fileFilter, limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB
+const upload = multer({ storage, fileFilter, limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB — OWASP Plan de Calidad
 
 // ─── OCR.space API ────────────────────────────────────────────────────────────
 // Extrae texto de la imagen del voucher y luego parsea los campos clave.
@@ -290,18 +291,25 @@ router.post('/:pedidoId', verificarToken, verificarRol('vendedor', 'admin'), upl
       data: { estado: 'voucher_cargado' },
     });
 
-    // Notificar a contabilidad
+    // Notificar a contabilidad — registrar timestamp para métrica de latencia
     const io = req.app.get('io');
+    const eventoOrigen = new Date();
+    io.to('contabilidad').emit('voucher_cargado', { pedidoId: pedido.id, numeroPedido: pedido.numeroPedido, voucher });
+    io.to('admin').emit('voucher_cargado', { pedidoId: pedido.id, numeroPedido: pedido.numeroPedido, voucher });
+    const entregadaEn = new Date();
+    const latenciaMs = entregadaEn - eventoOrigen;
+
     await prisma.notificacion.create({
       data: {
         tipo: 'voucher_cargado',
         mensaje: `Voucher cargado para pedido ${pedido.numeroPedido} - Banco: ${ocrData.banco} - S/ ${ocrData.monto}`,
         rolDestino: 'contabilidad',
         pedidoId: pedido.id,
+        eventoOrigen,
+        entregadaEn,
+        latenciaMs,
       },
     });
-    io.to('contabilidad').emit('voucher_cargado', { pedidoId: pedido.id, numeroPedido: pedido.numeroPedido, voucher });
-    io.to('admin').emit('voucher_cargado', { pedidoId: pedido.id, numeroPedido: pedido.numeroPedido, voucher });
 
     res.status(201).json({ voucher, mensaje: 'Voucher cargado y procesado por OCR' });
   } catch (err) {

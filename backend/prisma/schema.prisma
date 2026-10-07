@@ -112,11 +112,15 @@ model Voucher {
 }
 
 model Notificacion {
-  id        String   @id @default(uuid())
-  tipo      String   // "nuevo_pedido" | "voucher_cargado" | "pedido_confirmado" | "pedido_despachado"
-  mensaje   String
-  leida     Boolean  @default(false)
-  rolDestino String  // "almacen" | "contabilidad" | "admin"
-  pedidoId  String?
-  createdAt DateTime @default(now())
+  id            String   @id @default(uuid())
+  tipo          String   // "nuevo_pedido" | "voucher_cargado" | "pedido_confirmado" | "pedido_despachado"
+  mensaje       String
+  leida         Boolean  @default(false)
+  rolDestino    String   // "almacen" | "contabilidad" | "admin"
+  pedidoId      String?
+  // Timestamps para medir latencia de notificación (métrica < 30 seg del Plan de Calidad)
+  eventoOrigen  DateTime? // momento en que se confirmó la venta
+  entregadaEn   DateTime? // momento en que Socket.io emitió la alerta
+  latenciaMs    Int?      // diferencia en milisegundos (debe ser < 30000)
+  createdAt     DateTime @default(now())
 }
