@@ -106,7 +106,7 @@ Vendedor → Crea pedido → Carga foto voucher
 | ORM | Prisma |
 | Tiempo real | Socket.io |
 | Auth | JWT |
-| OCR | Simulado (reemplazable por Google Vision API) |
+| OCR | OCR SPACE |
 
 ---
 
