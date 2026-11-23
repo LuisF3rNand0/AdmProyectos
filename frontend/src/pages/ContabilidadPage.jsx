@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
+import { abrirVoucher } from '../utils/abrirVoucher'
 import toast from 'react-hot-toast'
 import { FiCheckCircle, FiXCircle, FiImage, FiRefreshCw } from 'react-icons/fi'
 import { useSocket } from '../context/SocketContext'
@@ -104,7 +105,7 @@ export default function ContabilidadPage() {
               {/* Datos OCR vs Total pedido */}
               <div className="grid md:grid-cols-2 gap-4 mb-4">
                 <div className="bg-blue-50 rounded-lg p-3">
-                  <p className="text-xs font-semibold text-blue-700 uppercase mb-2">Datos OCR del voucher</p>
+                  <p className="text-xs font-semibold text-blue-700 uppercase mb-2">{pedido.voucher.ocrRawText?.startsWith('[OCR PENDIENTE]') ? 'OCR pendiente — revisión manual' : 'Datos OCR del voucher'}</p>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-500">Banco:</span>
@@ -129,7 +130,7 @@ export default function ContabilidadPage() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-500">Confianza:</span>
-                      <span className="font-semibold">{pedido.voucher.ocrConfianza}%</span>
+                      <span className="font-semibold">{pedido.voucher.ocrConfianza == null ? 'No medida' : pedido.voucher.ocrConfianza + '%'}</span>
                     </div>
                   </div>
 
@@ -141,11 +142,11 @@ export default function ContabilidadPage() {
                 </div>
 
                 <div>
-                  <a href={pedido.voucher.imagenUrl} target="_blank" rel="noreferrer"
+                  <button type="button" onClick={() => abrirVoucher(pedido.voucher.imagenUrl).catch(err => toast.error(err.message))}
                     className="block border-2 border-dashed border-gray-200 rounded-lg p-4 text-center hover:border-blue-400 transition-colors group">
                     <FiImage size={32} className="mx-auto mb-1 text-gray-300 group-hover:text-blue-400 transition-colors" />
                     <p className="text-xs text-gray-400 group-hover:text-blue-500">Ver imagen original</p>
-                  </a>
+                  </button>
                 </div>
               </div>
 
