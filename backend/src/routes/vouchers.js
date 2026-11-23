@@ -131,11 +131,11 @@ function parsearTextoVoucher(rawText, confianza) {
   // Patrones: S/ 1,234.56 | S/1234.56 | PEN 1234.56 | MONTO: 1234.56
   let monto = null;
   const patronesMonto = [
-    /S\\/\\s*([0-9][0-9.,]*)/i,
-    /PEN\\s*([0-9][0-9.,]*)/i,
-    /MONTO[:\\s]+([0-9][0-9.,]*)/i,
-    /IMPORTE[:\\s]+([0-9][0-9.,]*)/i,
-    /TOTAL[:\\s]+([0-9][0-9.,]*)/i,
+    /S\/\s*([0-9][0-9.,]*)/i,
+    /PEN\s*([0-9][0-9.,]*)/i,
+    /MONTO[:\s]+([0-9][0-9.,]*)/i,
+    /IMPORTE[:\s]+([0-9][0-9.,]*)/i,
+    /TOTAL[:\s]+([0-9][0-9.,]*)/i,
   ];
 
   function montoNumerico(valor) {
@@ -146,13 +146,13 @@ function parsearTextoVoucher(rawText, confianza) {
       // El separador decimal es el que aparece más a la derecha.
       n = ultimoPunto > ultimaComa
         ? n.replace(/,/g, '')
-        : n.replace(/\\./g, '').replace(',', '.');
+        : n.replace(/\./g, '').replace(',', '.');
     } else if (ultimaComa >= 0) {
       n = n.length - ultimaComa - 1 === 2
         ? n.replace(/,/g, '.')
         : n.replace(/,/g, '');
     } else if (ultimoPunto >= 0 && n.length - ultimoPunto - 1 === 3) {
-      n = n.replace(/\\./g, '');
+      n = n.replace(/\./g, '');
     }
     const numero = Number(n);
     return Number.isFinite(numero) && numero > 0 && numero < 1000000 ? numero : null;
