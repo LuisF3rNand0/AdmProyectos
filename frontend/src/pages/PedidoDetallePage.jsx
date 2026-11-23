@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import { abrirVoucher } from '../utils/abrirVoucher'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
 import { FiUpload, FiImage, FiArrowLeft, FiCheckCircle } from 'react-icons/fi'
@@ -54,8 +55,9 @@ export default function PedidoDetallePage() {
       const res = await axios.post(`/api/vouchers/${id}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
-      toast.success('Voucher cargado y procesado por OCR')
+      toast.success(res.data.mensaje || 'Voucher cargado')
       setPreview(null)
+      if (fileRef.current) fileRef.current.value = ''
       cargarPedido()
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al cargar el voucher')
@@ -137,7 +139,7 @@ export default function PedidoDetallePage() {
           <div className="space-y-3">
             <div className="bg-green-50 border border-green-200 rounded-lg p-3">
               <p className="text-xs font-semibold text-green-700 uppercase mb-2 flex items-center gap-1">
-                <FiCheckCircle /> Datos extraídos por OCR
+                <FiCheckCircle /> {pedido.voucher.ocrRawText?.startsWith('[OCR PENDIENTE]') ? 'OCR pendiente — revisión manual' : 'Datos extraídos por OCR'}
               </p>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div><p className="text-xs text-gray-400">Banco</p><p className="font-semibold">{pedido.voucher.ocrBanco || '—'}</p></div>
@@ -161,10 +163,10 @@ export default function PedidoDetallePage() {
               </span>
             </div>
 
-            <a href={pedido.voucher.imagenUrl} target="_blank" rel="noreferrer"
+            <button type="button" onClick={() => abrirVoucher(pedido.voucher.imagenUrl).catch(err => toast.error(err.message))}
               className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
               <FiImage /> Ver imagen original
-            </a>
+            </button>
 
             {puedeCargarVoucher && (
               <p className="text-xs text-gray-400">Puedes reemplazar el voucher cargando uno nuevo abajo.</p>
@@ -188,7 +190,7 @@ export default function PedidoDetallePage() {
                 <div>
                   <FiUpload size={32} className="mx-auto mb-2 text-gray-400" />
                   <p className="text-sm text-gray-500">Toca para seleccionar imagen</p>
-                  <p className="text-xs text-gray-400">JPG, PNG hasta 10MB</p>
+                  <p className="text-xs text-gray-400">JPG, PNG hasta 5MB</p>
                 </div>
               )}
               <input
