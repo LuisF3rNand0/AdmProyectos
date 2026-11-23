@@ -338,7 +338,7 @@ router.post('/:pedidoId', verificarToken, verificarRol('vendedor', 'admin'), upl
     await prisma.notificacion.create({
       data: {
         tipo: 'voucher_cargado',
-        mensaje: `Voucher cargado para pedido ${pedido.numeroPedido} - Banco: ${ocrData.banco} - S/ ${ocrData.monto}`,
+        mensaje: `Voucher cargado para pedido ${pedido.numeroPedido} - Banco: ${ocrData.banco} - Monto: ${ocrData.monto == null ? 'pendiente' : 'S/ ' + ocrData.monto.toFixed(2)}`,
         rolDestino: 'contabilidad',
         pedidoId: pedido.id,
         eventoOrigen,
