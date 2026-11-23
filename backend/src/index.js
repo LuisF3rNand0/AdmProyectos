@@ -15,10 +15,13 @@ const notificacionesRoutes = require('./routes/notificaciones');
 const app = express();
 const server = http.createServer(app);
 
+// Dominios permitidos para el frontend local y el sitio desplegado en Render
+const allowedOrigins = ['http://localhost:5173', process.env.FRONTEND_URL].filter(Boolean);
+
 // Socket.io para notificaciones en tiempo real
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:5173',
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
   },
 });
@@ -27,7 +30,7 @@ const io = new Server(server, {
 app.set('io', io);
 
 // Middleware
-app.use(cors({ origin: 'http://localhost:5173' }));
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
@@ -62,5 +65,5 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`🚀 Servidor ELG corriendo en http://localhost:${PORT}`);
-  console.log(`📦 Base de datos: SQLite (dev.db)`);
+  console.log(`📦 Base de datos: PostgreSQL`);
 });
