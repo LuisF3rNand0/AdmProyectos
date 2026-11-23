@@ -139,7 +139,7 @@ export default function PedidoDetallePage() {
           <div className="space-y-3">
             <div className="bg-green-50 border border-green-200 rounded-lg p-3">
               <p className="text-xs font-semibold text-green-700 uppercase mb-2 flex items-center gap-1">
-                <FiCheckCircle /> {pedido.voucher.ocrRawText?.startsWith('[OCR PENDIENTE]') ? 'OCR pendiente — revisión manual' : 'Datos extraídos por OCR'}
+                <FiCheckCircle /> {pedido.voucher.ocrRawText?.startsWith('[OCR PENDIENTE]') ? 'OCR pendiente — revisión manual' : (!pedido.voucher.ocrFecha || !pedido.voucher.ocrNumOperacion || pedido.voucher.ocrMonto == null || pedido.voucher.ocrBanco === 'No identificado') ? 'OCR parcial — revisar campos faltantes' : 'Datos extraídos por OCR'}
               </p>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div><p className="text-xs text-gray-400">Banco</p><p className="font-semibold">{pedido.voucher.ocrBanco || '—'}</p></div>
