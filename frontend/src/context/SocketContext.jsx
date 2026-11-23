@@ -12,7 +12,7 @@ export function SocketProvider({ children }) {
   useEffect(() => {
     if (!user || !token) return
 
-    const newSocket = io('http://localhost:3001', {
+    const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:3001', {
       auth: { token },
     })
 
