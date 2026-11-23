@@ -71,6 +71,7 @@ model Pedido {
 
   items         ItemPedido[]
   voucher       Voucher?
+  imagenVoucher VoucherImagen?
 }
 
 model ItemPedido {
@@ -123,4 +124,13 @@ model Notificacion {
   entregadaEn   DateTime? // momento en que Socket.io emitió la alerta
   latenciaMs    Int?      // diferencia en milisegundos (debe ser < 30000)
   createdAt     DateTime @default(now())
+}
+
+// Almacenamiento persistente de imágenes de prueba: evita la pérdida del disco temporal de Render.
+model VoucherImagen {
+  pedidoId String @id
+  pedido   Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  mimeType String
+  contenido Bytes
+  createdAt DateTime @default(now())
 }
