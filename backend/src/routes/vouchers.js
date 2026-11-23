@@ -42,8 +42,8 @@ async function procesarOCR(rutaImagen) {
   const apiKey = process.env.OCR_SPACE_API_KEY;
 
   if (!apiKey) {
-    console.warn('⚠️  OCR_SPACE_API_KEY no configurada — usando modo simulado');
-    return simularOCR();
+    console.warn('⚠️ OCR_SPACE_API_KEY no configurada — extracción OCR pendiente');
+    return ocrNoDisponible('No se configuró OCR.space; requiere revisión manual');
   }
 
   // Intentar con engine 2 primero (mejor para vouchers), luego 1 y 3 como fallback
@@ -79,8 +79,9 @@ async function procesarOCR(rutaImagen) {
       if (!pagina || !pagina.ParsedText) continue;
 
       rawText = pagina.ParsedText.trim();
-      // OCR.space no da confianza directa, estimamos según el texto extraído
-      confianza = rawText.length > 50 ? 85 : 60;
+      // OCR.space no devuelve un porcentaje verificable de precisión por voucher.
+      // La precisión debe medirse en QA con una muestra y valores de referencia.
+      confianza = null;
 
       console.log(`✅ OCR engine ${engine} exitoso — ${rawText.length} caracteres extraídos`);
       break; // usamos este resultado
@@ -91,8 +92,8 @@ async function procesarOCR(rutaImagen) {
   }
 
   if (!rawText) {
-    console.warn('OCR no pudo extraer texto — usando modo simulado como fallback');
-    return simularOCR();
+    console.warn('OCR no pudo extraer texto — requiere revisión manual');
+    return ocrNoDisponible('OCR.space no extrajo texto; requiere revisión manual');
   }
 
   // Parsear los campos clave del texto extraído
@@ -212,23 +213,46 @@ function parsearTextoVoucher(rawText, confianza) {
   };
 }
 
-// ─── Fallback simulado (si no hay API key o falla el servicio) ────────────────
-function simularOCR() {
-  const bancos = ['BCP', 'BBVA', 'Interbank', 'Scotiabank', 'BanBif', 'Banca de la Nación'];
-  const banco = bancos[Math.floor(Math.random() * bancos.length)];
-  const monto = parseFloat((Math.random() * 5000 + 100).toFixed(2));
-  const numOp = String(Math.floor(Math.random() * 9000000000) + 1000000000);
-  const hoy = new Date();
-  const fecha = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
+// Si no hay clave o falla OCR.space, nunca inventar datos bancarios.
+function ocrNoDisponible(motivo) {
   return {
-    monto,
-    fecha,
-    numOperacion: numOp,
-    banco,
-    rawText: `[MODO SIMULADO]\nBanco: ${banco}\nFecha: ${fecha}\nN° Operación: ${numOp}\nMonto: S/ ${monto.toFixed(2)}`,
-    confianza: 0,
+    monto: null,
+    fecha: null,
+    numOperacion: null,
+    banco: 'No identificado',
+    rawText: '[OCR PENDIENTE] ' + motivo,
+    confianza: null,
   };
 }
+
+// Imagen original persistida en PostgreSQL, con acceso exclusivo para roles autorizados.
+router.get('/:pedidoId/imagen', verificarToken, verificarRol('vendedor', 'contabilidad', 'admin'), async (req, res) => {
+  try {
+    const pedido = await prisma.pedido.findUnique({
+      where: { id: req.params.pedidoId },
+      select: { vendedorId: true },
+    });
+    if (!pedido) return res.status(404).json({ error: 'Pedido no encontrado' });
+    if (req.user.rol === 'vendedor' && pedido.vendedorId !== req.user.id) {
+      return res.status(403).json({ error: 'Sin acceso a este comprobante' });
+    }
+
+    const archivo = await prisma.voucherImagen.findUnique({
+      where: { pedidoId: req.params.pedidoId },
+    });
+    if (!archivo) return res.status(404).json({
+      error: 'Imagen no disponible; puede ser un archivo anterior al almacenamiento persistente',
+    });
+    res.set('Content-Type', archivo.mimeType);
+    res.set('Cache-Control', 'private, no-store');
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('Content-Disposition', 'inline');
+    return res.send(Buffer.from(archivo.contenido));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Error al recuperar el voucher' });
+  }
+});
 
 // POST /api/vouchers/:pedidoId - Cargar voucher
 router.post('/:pedidoId', verificarToken, verificarRol('vendedor', 'admin'), upload.single('voucher'), async (req, res) => {
@@ -245,50 +269,48 @@ router.post('/:pedidoId', verificarToken, verificarRol('vendedor', 'admin'), upl
       return res.status(403).json({ error: 'Sin acceso a este pedido' });
     }
 
-    // Procesar OCR con OCR.space API
-    const imagenUrl = `/uploads/vouchers/${req.file.filename}`;
-    const rutaCompleta = path.join(__dirname, '../../uploads/vouchers', req.file.filename);
+    // OCR.space procesa el archivo temporal; PostgreSQL conserva la imagen original.
+    const rutaCompleta = req.file.path;
     const ocrData = await procesarOCR(rutaCompleta);
+    const imagenUrl = '/api/vouchers/' + pedido.id + '/imagen';
+    const datosVoucher = {
+      imagenUrl,
+      imagenNombre: req.file.filename,
+      ocrMonto: ocrData.monto,
+      ocrFecha: ocrData.fecha,
+      ocrNumOperacion: ocrData.numOperacion,
+      ocrBanco: ocrData.banco,
+      ocrRawText: ocrData.rawText,
+      ocrConfianza: ocrData.confianza,
+      estadoRevision: 'pendiente',
+      notaContable: null,
+      revisadoEn: null,
+    };
 
-    // Guardar o actualizar voucher
-    const existeVoucher = await prisma.voucher.findUnique({ where: { pedidoId: req.params.pedidoId } });
-
-    let voucher;
-    if (existeVoucher) {
-      voucher = await prisma.voucher.update({
-        where: { pedidoId: req.params.pedidoId },
-        data: {
-          imagenUrl,
-          imagenNombre: req.file.filename,
-          ocrMonto: ocrData.monto,
-          ocrFecha: ocrData.fecha,
-          ocrNumOperacion: ocrData.numOperacion,
-          ocrBanco: ocrData.banco,
-          ocrRawText: ocrData.rawText,
-          ocrConfianza: ocrData.confianza,
-          estadoRevision: 'pendiente',
+    // Una transacción evita que voucher e imagen queden desincronizados.
+    const voucher = await prisma.$transaction(async (tx) => {
+      const registrado = await tx.voucher.upsert({
+        where: { pedidoId: pedido.id },
+        update: datosVoucher,
+        create: { ...datosVoucher, pedidoId: pedido.id },
+      });
+      await tx.voucherImagen.upsert({
+        where: { pedidoId: pedido.id },
+        update: {
+          mimeType: req.file.mimetype,
+          contenido: fs.readFileSync(rutaCompleta),
+        },
+        create: {
+          pedidoId: pedido.id,
+          mimeType: req.file.mimetype,
+          contenido: fs.readFileSync(rutaCompleta),
         },
       });
-    } else {
-      voucher = await prisma.voucher.create({
-        data: {
-          imagenUrl,
-          imagenNombre: req.file.filename,
-          ocrMonto: ocrData.monto,
-          ocrFecha: ocrData.fecha,
-          ocrNumOperacion: ocrData.numOperacion,
-          ocrBanco: ocrData.banco,
-          ocrRawText: ocrData.rawText,
-          ocrConfianza: ocrData.confianza,
-          pedidoId: req.params.pedidoId,
-        },
+      await tx.pedido.update({
+        where: { id: pedido.id },
+        data: { estado: 'voucher_cargado' },
       });
-    }
-
-    // Actualizar estado del pedido
-    await prisma.pedido.update({
-      where: { id: req.params.pedidoId },
-      data: { estado: 'voucher_cargado' },
+      return registrado;
     });
 
     // Notificar a contabilidad — registrar timestamp para métrica de latencia
@@ -311,10 +333,18 @@ router.post('/:pedidoId', verificarToken, verificarRol('vendedor', 'admin'), upl
       },
     });
 
-    res.status(201).json({ voucher, mensaje: 'Voucher cargado y procesado por OCR' });
+    res.status(201).json({
+      voucher,
+      mensaje: ocrData.rawText.startsWith('[OCR PENDIENTE]')
+        ? 'Voucher cargado; OCR pendiente de revisión manual'
+        : 'Voucher cargado y procesado por OCR.space',
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al cargar voucher' });
+  } finally {
+    // El disco temporal no es el almacenamiento definitivo.
+    if (req.file?.path) fs.promises.unlink(req.file.path).catch(() => {});
   }
 });
 
