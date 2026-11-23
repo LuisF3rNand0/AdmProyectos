@@ -32,7 +32,8 @@ app.set('io', io);
 // Middleware
 app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Los comprobantes se consultan por /api/vouchers/:pedidoId/imagen con autenticación.
+// Nunca exponer la carpeta temporal de uploads como recurso público.
 
 // Rutas
 app.use('/api/auth', authRoutes);
