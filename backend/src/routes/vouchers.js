@@ -131,24 +131,38 @@ function parsearTextoVoucher(rawText, confianza) {
   // Patrones: S/ 1,234.56 | S/1234.56 | PEN 1234.56 | MONTO: 1234.56
   let monto = null;
   const patronesMonto = [
-    /S\/\s*([0-9]{1,3}(?:[,\.][0-9]{3})*(?:[,\.][0-9]{2})?)/i,
-    /PEN\s*([0-9]{1,3}(?:[,\.][0-9]{3})*(?:[,\.][0-9]{2})?)/i,
-    /MONTO[:\s]+([0-9]{1,3}(?:[,\.][0-9]{3})*(?:[,\.][0-9]{2})?)/i,
-    /IMPORTE[:\s]+([0-9]{1,3}(?:[,\.][0-9]{3})*(?:[,\.][0-9]{2})?)/i,
-    /TOTAL[:\s]+([0-9]{1,3}(?:[,\.][0-9]{3})*(?:[,\.][0-9]{2})?)/i,
+    /S\\/\\s*([0-9][0-9.,]*)/i,
+    /PEN\\s*([0-9][0-9.,]*)/i,
+    /MONTO[:\\s]+([0-9][0-9.,]*)/i,
+    /IMPORTE[:\\s]+([0-9][0-9.,]*)/i,
+    /TOTAL[:\\s]+([0-9][0-9.,]*)/i,
   ];
+
+  function montoNumerico(valor) {
+    let n = valor.replace(/[^0-9.,]/g, '');
+    const ultimoPunto = n.lastIndexOf('.');
+    const ultimaComa = n.lastIndexOf(',');
+    if (ultimoPunto >= 0 && ultimaComa >= 0) {
+      // El separador decimal es el que aparece más a la derecha.
+      n = ultimoPunto > ultimaComa
+        ? n.replace(/,/g, '')
+        : n.replace(/\\./g, '').replace(',', '.');
+    } else if (ultimaComa >= 0) {
+      n = n.length - ultimaComa - 1 === 2
+        ? n.replace(/,/g, '.')
+        : n.replace(/,/g, '');
+    } else if (ultimoPunto >= 0 && n.length - ultimoPunto - 1 === 3) {
+      n = n.replace(/\\./g, '');
+    }
+    const numero = Number(n);
+    return Number.isFinite(numero) && numero > 0 && numero < 1000000 ? numero : null;
+  }
 
   for (const patron of patronesMonto) {
     const match = rawText.match(patron);
-    if (match) {
-      // Normalizar: remover comas de miles, asegurar punto decimal
-      const montoStr = match[1].replace(/,(\d{3})/g, '$1').replace(',', '.');
-      const montoNum = parseFloat(montoStr);
-      if (!isNaN(montoNum) && montoNum > 0 && montoNum < 1000000) {
-        monto = montoNum;
-        break;
-      }
-    }
+    if (!match) continue;
+    monto = montoNumerico(match[1]);
+    if (monto !== null) break;
   }
 
   // ── Detectar fecha ──
