@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 const FormData = require('form-data');
+const { extraerFechaVoucher, extraerOperacionVoucher } = require('../utils/parsearCampos');
 
 const prisma = new PrismaClient();
 
@@ -165,57 +166,9 @@ function parsearTextoVoucher(rawText, confianza) {
     if (monto !== null) break;
   }
 
-  // ── Detectar fecha ──
-  let fecha = null;
-  const patronesFecha = [
-    /(\d{2})[\/\-](\d{2})[\/\-](\d{4})/,   // DD/MM/YYYY o DD-MM-YYYY
-    /(\d{4})[\/\-](\d{2})[\/\-](\d{2})/,   // YYYY-MM-DD
-    /(\d{2})\s+(?:ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SET|SEP|OCT|NOV|DIC)\s+(\d{4})/i,
-  ];
-
-  for (const patron of patronesFecha) {
-    const match = rawText.match(patron);
-    if (match) {
-      // Devolver en formato DD/MM/YYYY
-      if (match[0].includes('-') || match[0].includes('/')) {
-        const partes = match[0].split(/[\/\-]/);
-        if (partes[0].length === 4) {
-          // YYYY-MM-DD → DD/MM/YYYY
-          fecha = `${partes[2]}/${partes[1]}/${partes[0]}`;
-        } else {
-          fecha = `${partes[0]}/${partes[1]}/${partes[2]}`;
-        }
-      } else {
-        fecha = match[0];
-      }
-      break;
-    }
-  }
-
-  // ── Detectar número de operación ──
-  let numOperacion = null;
-  const patronesOp = [
-    /(?:N[°º]?\s*(?:DE\s+)?OPERACI[ÓO]N|N[°º]?\s*OP\.?|OPERACI[ÓO]N\s*N[°º]?|CCI|REFERENCIA)[:\s#]*([0-9A-Z]{6,20})/i,
-    /(?:TRANSACCI[ÓO]N|TRANSACCION)[:\s#]*([0-9A-Z]{6,20})/i,
-    /(?:CODIGO|CÓD\.?)[:\s#]*([0-9A-Z]{8,20})/i,
-  ];
-
-  for (const patron of patronesOp) {
-    const match = rawText.match(patron);
-    if (match) {
-      numOperacion = match[1].trim();
-      break;
-    }
-  }
-
-  // Si no encontró número de operación, buscar secuencias largas de dígitos
-  if (!numOperacion) {
-    const secuencias = rawText.match(/\b\d{8,15}\b/g);
-    if (secuencias) {
-      // Tomar la secuencia que no sea fecha ni monto
-      numOperacion = secuencias.find(s => s.length >= 8) || null;
-    }
-  }
+  // Extraer solo datos reconocibles del texto. Los campos ausentes quedan pendientes.
+  const fecha = extraerFechaVoucher(rawText);
+  const numOperacion = extraerOperacionVoucher(rawText);
 
   return {
     monto,
@@ -351,7 +304,9 @@ router.post('/:pedidoId', verificarToken, verificarRol('vendedor', 'admin'), upl
       voucher,
       mensaje: ocrData.rawText.startsWith('[OCR PENDIENTE]')
         ? 'Voucher cargado; OCR pendiente de revisión manual'
-        : 'Voucher cargado y procesado por OCR.space',
+        : (!ocrData.fecha || !ocrData.numOperacion || !ocrData.monto || ocrData.banco === 'No identificado')
+          ? 'OCR.space leyó el voucher, pero faltan campos por verificar manualmente'
+          : 'Voucher cargado y campos extraídos por OCR.space',
     });
   } catch (err) {
     console.error(err);
