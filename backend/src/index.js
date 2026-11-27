@@ -43,6 +43,15 @@ app.use('/api/vouchers', vouchersRoutes);
 app.use('/api/almacen', almacenRoutes);
 app.use('/api/notificaciones', notificacionesRoutes);
 
+// Ruta principal pública
+app.get('/', (req, res) => {
+  res.json({
+    proyecto: 'Eléctricos Generales S.A.C.',
+    servicio: 'API Backend',
+    estado: 'Operativo'
+  });
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'ELG API corriendo', timestamp: new Date().toISOString() });
